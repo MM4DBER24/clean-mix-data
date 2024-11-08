@@ -1,0 +1,592 @@
+---
+title: "Tutorial: Clean & Screen Data to Prepare for LCA Analysis"
+subtitle: "*CRDC data example extracted from `educationdata` R Repository*"
+author: "Adam Garber"
+date: "Updated: `r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    theme: flatly
+  pdf_document:
+    toc: yes
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE, warning = FALSE, message = FALSE)
+```
+
+# --------------------------------------------------------------------------------------
+
+![](figures/mm4dber_Logo.jpg){style="float: left;" width="300"}
+
+![](figures/NSF-Logo.png){style="float: left;" width="300"}
+
+# --------------------------------------------------------------------------------------
+
+> Mixture Modeling for Discipline Based Education Researchers (MM4DBER) is an NSF funded training grant to support STEM Education scholars in integrating mixture modeling into their research.
+
+### Download project materials here: [GitHub Repository](https://github.com/MM4DBER24/clean-mix-data)
+
+# --------------------------------------------------------------------------------------
+
+## Data Source: Civil Rights Data Collection (CRDC) repository
+
+https://github.com/UrbanInstitute/education-data-package-r
+
+https://educationdata.urban.org/documentation/index.html#data_sources
+
+### Variable terms & definitions
+
+https://www.isbe.net/Documents/Civil-Rights-Data-Collection-Terms.pdf
+
+
+# --------------------------------------------------------------------------------------
+
+### Example: Bullying in Schools
+
+- To demonstrate mixture modeling in the training program and online resource components of the IES grant we utilize the *Civil Rights Data Collection (CRDC)* (CRDC) data repository.
+- The CRDC is a federally mandated school-level data collection effort that occurs every other year.
+- This public data is currently available for selected latent class indicators across 4 years (2011, 2013, 2015, 2017) and all US states.
+- In this example, we use the Arizona state sample collected in 2017 (i.e., LCA indicators).
+- We utilize six focal indicators which constitute the latent class model in our example; three variables which report on harassment/bullying in schools based on disability, race, or sex, and three variables on full-time equivalent school staff hires (counselor, psychologist, law enforcement).
+- This data source also includes a variety of candidate auxiliary variables: Covariates reported in 2017 and distal outcomes reported in 2018 (e.g., math/reading assessments and graduation rates).
+
+# --------------------------------------------------------------------------------------
+
+### R Data Science Terms
+
+What is a `data.frame` (shorthand; `df`)?
+
+A `data.frame` is a specific type of `R-object` (an object that we save into the R `Global Environment`; see upper-right window pane). When we save `data.frames` using functions frome the `tidyverse` package they are saved as `tibbles` which is just a special format of `df`.
+
+What is an `R function`? E.g, `read_csv()`
+
+R functions are the tools which are designed to conduct specific data science tasks such as reading CSV files into R. They work by having the user provide 1 or more inputs called `arguments`. Arguments are separated within R functions by commas (`,`). R functions can also do things like estimate statistical models `lm()` and calculate equations `sum()`. This is a bit confusing because in the statistics the same term is used to refer to a statistical or mathematical operations (*e.g., f(x) = m(x) + b*). R packages contain pre-made functions, or you can write your own. 
+
+What are `arguments` within R functions?
+
+- Arguments are places where the user (you) need to include an input. Arguments are ordered sequentially within R functions.
+- For example, the `write_csv()` functions first `argument` is where you input the `data.frame` which you want to use to write a CSV file from
+
+
+
+# --------------------------------------------------------------------------------------
+
+
+### Task 1a: Load in the raw `bullying` indicators & save it within your `R-project`
+
+
+# --------------------------------------------------------------------------------------
+
+Install & load packages 
+
+NOTE: The `educationdata` R package is the location in which this data was downloaded from
+
+* We will not need it for this tutorial but if you want to access this large education repository (see link) 
+```{r}
+#install.packages("educationdata")
+library(educationdata)
+
+library(tidyverse)
+library(here)
+library(naniar)
+library(janitor)
+library(naniar)
+library(gt)
+library(lubridate)
+library(glue)
+
+```
+
+Step 1: Load data from repository source (**we will skip this step - it takes to long!**): 
+
+- Load data from the `educationdata` R package using the function `get_education_data()`
+- Specify the specific data targets (`level`, `source`, `topic`, `subtopic`, `filters`)
+- I have already done this for you & saved the data in CSV format (in the `data` sub-folder)
+
+```{r}
+
+# bullydis17 <- get_education_data(
+#                          level = 'schools', 
+#                          source = 'crdc', 
+#                          topic = 'harassment-or-bullying', 
+#                          subtopic = list('disability', 'sex'),
+#                          filters = list(year = 2017),
+#                          add_labels = TRUE)
+
+```
+
+Step 2: Create a CSV file for easy access in your `data` directory (**again- we will skip this step**): 
+
+- Write a CSV file using the `write_csv()` function (so you don't have to reload it every time)
+- Argument 1: Provide the `data.frame` R-object to read into the function
+- Argument 2: use the `here` function to specify the location & name of the CSV file you create
+- NOTE: The code `here::here()` is excessively verbose, just `here()` would also work. In some instances if you want to make it clear to future readers such as your *future-self* which R package the `here()` function comes from you can use this long-format (in this case it is obvious and so redundant/unnecessary to include).
+
+```{r}
+
+# write_csv(bullydis17, here::here("data", "crdc_bully2017.csv"))
+
+```
+
+Step 3: Read in the data 
+
+a. This is where you would start when returning to your project after steps 1 & 2 have been completed (after loading your packages of course!)
+
+```{r}
+bully17_raw <- read_csv(here::here("data", "crdc_bully2017.csv"))
+```
+
+Step 4: **Always** check your data 
+
+- To make sure it was read in correctly 
+- To make sure you extracted the correct variables 
+- Use the function `tabyl()` from the package `janitor()` to take a quick look at variable frequencies
+
+```{r}
+# a. View the `data.frame` (click on the R-object in your `Environment`)
+
+# b. Check frequencies using tabyl()...  Does the data make sense? 
+tabyl(teach_staff$law_enforcement_ind)
+tabyl(teach_staff$counselors_fte)
+tabyl(teach_staff$psychologists_fte)
+tabyl(teach_staff$social_workers_fte)
+
+# You could also use `summary()`, `psych::describe()`, or many other functions to look at summary stats... 
+# I like to look at important variables 1-by-1 using tabyl() when doing my initial quick check for weird values and missing codes
+```
+
+# --------------------------------------------------------------------------------------
+
+
+### Task 1b: Load in the raw `staff` indicators & save it (repeat steps 1-3)
+
+
+# --------------------------------------------------------------------------------------
+
+Step 1: Load data from repository source
+
+- *Advanced tip*: Whenever we notice repetitive code we should consider how many times we will need to repeat the task. 
+- When we are repeating steps more then twice it is worth considering the option of writing a function (to save time). Plus, its great practice!
+
+```{r}
+# teach_staff <- get_education_data(
+#                          level = 'schools', 
+#                          source = 'crdc', 
+#                          topic = 'teachers-staff', 
+#                          filters = list(year = 2017),
+#                          add_labels = TRUE)
+```
+
+Step 2: Create a CSV file
+
+```{r}
+# write_csv(teach_staff, here::here("data", "teach_staff17.csv"))
+```
+
+Step 3: Read in the data 
+
+```{r}
+
+staff17_raw <- read_csv(here::here("data", "teach_staff17.csv"))
+
+```
+
+Step 4: **Always** check your data 
+
+```{r}
+# a. View the `data.frame` (click on the R-object in your `Environment`)
+
+# b. Check frequencies using tabyl()...  Does the data make sense? 
+tabyl(teach_staff$law_enforcement_ind)
+tabyl(teach_staff$counselors_fte)
+tabyl(teach_staff$psychologists_fte)
+tabyl(teach_staff$social_workers_fte)
+
+```
+
+
+# --------------------------------------------------------------------------------------
+
+### Task 2a: Clean & screen the `bullying` data
+
+# --------------------------------------------------------------------------------------
+
+Step 1. Let's see what we are working with
+
+Take a look at the data stratified by state (`fips`) 
+```{r, eval=FALSE}
+tabyl(bully17_raw$fips)
+```
+
+Step 2. Tidying up the `bully17_raw` data
+
+- Take a look at the `bully17_raw` data. Notice how each observation is repeated 9 times (hint: check `crdc_id`)
+- This is a messy, very non-tidy data format.
+- We want to use school-wide observations so we are going to extract observations labeled *Total* across demographics (`race`, `sex`, `disability`)
+
+a. Take the raw 2017 bully data (`bully17_raw`) & create a new `data.frame` named `bully_version1`
+b. Use the `filter()` function to select rows where the three variables `race`, `sex`, and `disability` have the variable level `Total`
+c. Next (after `%>%`) we will use the `select()` function to select columns by label (`crdc_id, leaid, ncessch, fips`) and then also select any columns that contain the character string "report" and "disc". Because we want to select **all** variables with these two character stems
+
+```{r}
+bully_version1 <- bully17_raw %>% 
+  filter(race == "Total", sex == "Total", disability == "Total") %>% 
+  select(crdc_id, leaid, ncessch, fips,
+         contains("report"),
+         contains("disc"))
+```
+
+Let's check to see if we got the right variables & do a quick frequency scan
+```{r}
+# a. View the `data.frame` (click on the R-object in your `Environment`)
+
+# b Check frequencies using tabyl()
+tabyl(bully_version1$students_report_harass_dis)
+```
+
+Step 3. Extract the target sample (Arizona)
+
+I chose Arizona state for the target sample- I wanted to use a smaller sub-sample for demonstration purposes (i.e., LCA estimation)
+
+a. Create a new `data.frame` named `bully_version2` building off of our previous df named `bully_version1`
+b. Use the `filter()` function to filter observations where `fips == "Arizona"`
+
+```{r}
+
+bully_version2 <- bully_version1 %>% 
+filter(fips == "Arizona") 
+  
+```
+
+Quick check
+```{r}
+# a. View the `data.frame` (click on the R-object in your `Environment`)
+
+# b Check frequencies using tabyl()
+tabyl(bully_version2$students_report_harass_dis)
+```
+
+Step 4. Dichotomize indicator variables and clean up variable names
+
+- I chose to investigate to make comparisons across schools that had greater than zero reported bullying incidents to schools with any reported incidents
+- Note (**important**): This decision was made to create an illustrative LCA example and is **not based on specific theoretical precedent**
+- This data could be modeled in a variety of ways such as a **count LCA** or various **ordinal LCA`'** (A subject for another day!)
+
+a. Use `contains()` to select variables that match a character string
+b. Then using `mutate_at()` & `case_when()` dichotomize the variable set (threshold; >=1 to 1, all else to 0)
+c. Use `rename_all()` & `string_replace()` to change variable stem across the variable set
+d. Re-arrange columns using `relocate()`
+
+
+```{r}
+bully_version3 <- bully_version2 %>% 
+    mutate_at(vars(contains("students")), 
+    ~ case_when(
+    . >= 1 ~ 1,
+    . == 0 ~ 0 )) %>% 
+  rename_all(~stringr::str_replace(.,"students_report_harass_","report_")) %>% 
+  rename_all(~stringr::str_replace(.,"students_disc_harass_","discip_")) %>% 
+  relocate(crdc_id, fips, leaid,
+           ends_with("dis"),
+           ends_with("race"),
+           ends_with("sex"))
+```
+
+Take a look at our cleaned candidate indicators (frequencies)
+```{r}
+# OOOPS, the code is 'broken' & needs fixing....
+
+# Hold down `option` key and change all six rows to the correct df name
+tabyl(bully_data$report_dis)
+tabyl(bully_data$report_race)
+tabyl(bully_data$report_sex)
+tabyl(bully_data$discip_dis)
+tabyl(bully_data$discip_race)
+tabyl(bully_data$discip_sex)
+
+```
+
+# --------------------------------------------------------------------------------------
+
+
+### Task 2b: Do it all over again! (clean up - staff17_raw )
+
+# --------------------------------------------------------------------------------------
+
+- Take a look at the staff data
+- Full-Time Equivalent (FTE): 1.0 indicates full time staff member
+
+a. Create a new `data.frame` named `staff_version1`from the original data
+b. Select all columns containing the character strings listed
+
+```{r}
+staff_version1 <- staff17_raw %>% 
+  select(crdc_id, leaid, ncessch, fips, 
+         contains("counselor"), contains("psych"), contains("social"),
+         contains("nurse"),contains("security"),contains("law"))
+```
+
+Quick check 
+```{r}
+tabyl(staff_version1$social_workers_fte)
+tabyl(staff_version1$psychologists_fte)
+tabyl(staff_version1$counselors_fte)
+tabyl(staff_version1$law_enforcement_fte)
+
+# Hmmm... What to do about non-integer values (i.e., part-time staff / average number of school staff)?
+# Recall- observation unit is at the school-level (so these are averages)
+```
+
+Extract the target sample (Arizona)
+```{r}
+
+staff_version2 <- staff_version1 %>% 
+filter(fips == "Arizona") 
+  
+```
+
+Dichotomize & rename variables 
+```{r}
+staff_version3 <- staff_version2 %>% 
+    mutate_at(vars(contains("teacher"),
+         contains("counselor"), contains("psych"), contains("social"),
+         contains("nurse"),contains("security"),law_enforcement_fte), 
+    ~ case_when(
+    . >= .1 ~ 1,
+    . == 0 ~ 0 )) %>% 
+  rename_all(~stringr::str_replace(.,"_enforcement","")) %>% 
+  rename_all(~stringr::str_replace(.,"_workers","")) %>% 
+  rename_all(~stringr::str_replace(.,"_guard","")) %>% 
+  rename_all(~stringr::str_replace(.,"ologists",""))
+```
+
+# --------------------------------------------------------------------------------------
+
+### Task 3: Combine (join) the two cleaned data.frames
+
+# --------------------------------------------------------------------------------------
+
+- We want all the bulling and staff LCA indicators in a single data.frame
+- We want to join by our ID variables- `crdc_id` (school ID) and `leaid` (district ID)
+
+```{r}
+bully_staff_combined <- bully_version3 %>% 
+  full_join(staff_version3) %>% 
+  select(-fips, -law_ind) %>% 
+  relocate(crdc_id, ncessch, leaid)
+```
+
+
+Extra step: Save the combined LCA indicator data   
+```{r}
+write_csv(bully_staff_combined, here::here("data", "CRDC_BullyStaff_AZ17.csv"))
+```
+
+# --------------------------------------------------------------------------------------
+
+### Task 4: Read-in some candidate auxiliary variables - covariates & distal outcomes
+
+# --------------------------------------------------------------------------------------
+
+- We are going to read in 10 new CSV files so let's de-clutter our R environment first
+- Clear the R environment for next stage of data screening & cleaning (look for the broom symbol)
+- Note that this data was extracted from `educationdata` R package in a previous step 
+- We will use the `read_csv()` & `here()` package as in previous steps
+- Notice that the code has been aligned - this is a short-cut for writing repetitive code (`OPTION-select` method)
+
+```{r}
+# Read the final LCA indicator data created in "Task 3" back into our environment (we need this one)
+lca_indicators <- read_csv(here::here("data", "CRDC_BullyStaff_AZ17.csv"))    # LCA indicators (bully + staff)
+
+assess18   <- read_csv(here::here("data_aux", "assessments18.csv"))      # candidate distals 18'
+gradrate18 <- read_csv(here::here("data_aux", "gradrate18.csv"))         # candidate distals 18'
+meps18     <- read_csv(here::here("data_aux", "meps18.csv"))             # candidate distals 18'
+
+discipline17  <- read_csv(here("data_aux", "discipline17.csv"))          # candidate covariates 17'
+finance17     <- read_csv(here("data_aux", "finance17.csv"))             # candidate covariates 17'
+offenses17    <- read_csv(here("data_aux", "offenses17.csv"))            # candidate covariates 17'
+offerings17   <- read_csv(here("data_aux", "offerings17.csv"))           # candidate covariates 17'
+restraint17   <- read_csv(here("data_aux", "restraint17.csv"))           # candidate covariates 17'
+math_sci17    <- read_csv(here("data_aux", "math_science_enroll17.csv")) # candidate covariates 17'
+directory17   <- read_csv(here("data_aux", "directory17.csv"))           # candidate covariates 17'
+
+```
+
+# --------------------------------------------------------------------------------------
+
+### Task 5: Clean covariate data (step-1)
+
+# --------------------------------------------------------------------------------------
+
+```{r}
+assess_AZ <-  assess18 %>% 
+   filter(fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         contains("midpt"))
+
+grad_AZ <-  gradrate18 %>% 
+   filter(disability == "Total", econ_disadvantaged == "Total", foster_care == "Total",
+          race == "Total", homeless == "Total", fips == "Arizona") %>% 
+   group_by(ncessch) %>% 
+   slice(1) %>% 
+   ungroup() %>% 
+   select(leaid, ncessch, # county & school IDs
+          contains("low"),
+          contains("mid"),
+          contains("high"))
+
+meps_AZ <-  meps18 %>% 
+   filter(fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         contains("pct"),
+         contains("ptl"))
+
+discipline_AZ <-  discipline17 %>%
+   filter(race == "Total", sex == "Total", disability == "Total", lep == "All students",
+   fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         contains("student"),
+         contains("expulsion"),
+         contains("transfer"))
+
+offenses_AZ <-  offenses17 %>%
+   filter(fips == "Arizona") %>% 
+   select(-fips,-year,-crdc_id,-homicide_ind)
+
+offerings_AZ <-  offerings17 %>%
+   filter(fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         contains("class"),
+         contains("taught"),
+         -contains("single"))
+
+restraint_AZ <-  restraint17 %>%
+   filter(disability == "Total",fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+          contains("instances"))
+
+math_sci_AZ <- math_sci17 %>%
+   filter(race == "Total", sex == "Total", disability == "Total", lep == "All students",
+   fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         contains("enrl"))
+
+finance_AZ <-  finance17 %>%
+   filter(fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         contains("salaries"),
+         contains("aides"),
+         contains("expend"), administration_fte)
+
+directory_AZ <-  directory17 %>%
+   filter(fips == "Arizona") %>% 
+   select(leaid, ncessch, # county & school IDs
+         school_type,school_level,
+         urban_centric_locale,
+         enrollment,teachers_fte,
+         lunch_program,title_i_schoolwide,
+         title_i_eligible)
+```
+
+Quick check
+```{r}
+tabyl(directory_AZ$urban_centric_locale)
+tabyl(directory_AZ$school_type)
+tabyl(directory_AZ$school_level)
+tabyl(directory_AZ$lunch_program)
+tabyl(directory_AZ$title_i_schoolwide)
+tabyl(directory_AZ$teachers_fte)
+```
+
+# --------------------------------------------------------------------------------------
+
+### Task 6: Combine indicator with covariate data & 2nd data cleaning step
+
+# --------------------------------------------------------------------------------------
+
+```{r}
+crcd_data <- lca_indicators %>% 
+  full_join(directory_AZ) %>% 
+  full_join(assess_AZ) %>% 
+  rename_all(~stringr::str_replace(.,"_test_pct_prof_midpt","_test")) %>% 
+  rename_all(~stringr::str_replace(.,"title_i","title1")) %>% 
+  rename_all(~stringr::str_replace(.,"_schoolwide","_s")) %>% 
+  rename_all(~stringr::str_replace(.,"_eligible","_e")) %>% 
+  rename_all(~stringr::str_replace(.,"_centric_locale","_rural")) %>% 
+  mutate_at(vars(contains("lunch_program")),
+    ~ case_when(
+    . == "No" ~ 0,
+    . == "Yes participating without using any Provision or the CEP" ~ 1,
+    . == "Yes under Provision 2" ~ 1,
+    . == "Yes under Provision 3" ~ 1,
+    . == "Yes under the Community Eligibility Provision (CEP)" ~ 1)) %>% 
+  replace_with_na(replace = list(math_test = c(-3))) %>% 
+  replace_with_na(replace = list(read_test = c(-3))) %>% 
+  replace_with_na(replace = list(title1_s = c("Missing/not reported"))) %>% 
+  replace_with_na(replace = list(title1_e = c("Missing/not reported"))) %>% 
+  mutate_at(vars(contains("title")),
+    ~ case_when(
+    . == "No" ~ 0,
+    . == "Yes" ~ 1))
+```
+
+Check covariate frequencies
+```{r}
+tabyl(crcd_data$teachers_fte)
+tabyl(crcd_data$title1_e)
+tabyl(crcd_data$lunch_program)
+tabyl(crcd_data$read_test)
+tabyl(crcd_data$math_test)
+```
+
+Check distal outcome distribution using density plots 
+```{r}
+crcd_data %>% 
+  ggplot(aes(x=read_test)) +
+    geom_density() +
+    theme_light()
+
+crcd_data %>% 
+  ggplot(aes(x=math_test)) +
+    geom_density() +
+    theme_light()
+```
+
+# --------------------------------------------------------------------------------------
+
+### Task 7: Write final data files 
+
+# --------------------------------------------------------------------------------------
+
+
+```{r}
+write_csv(crcd_data, here::here("data", "CRDC_Aux_AZ17.csv"))
+
+```
+
+```{r}
+
+crcd_3step <- crcd_data %>% 
+  select(-school_type,-school_level,-urban_rural)
+
+write_csv(crcd_3step, here::here("data", "crcd_aux_data.csv"))
+
+```
+
+# --------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
